@@ -944,6 +944,8 @@ const (
 // it bounds the number of pings going on at once. The idea is that
 // people only use ping occasionally to see if their internet's working
 // so this doesn't need to be great.
+// On Apple platforms, this function doesn't run the ping command. Instead,
+// it sends a non-privileged ping.
 //
 // The 'direction' parameter is used to determine where the response "pong"
 // packet should be written, if the ping succeeds. See the documentation on the
@@ -962,7 +964,9 @@ func (ns *Impl) userPing(dstIP netip.Addr, pingResPkt []byte, direction userPing
 	switch runtime.GOOS {
 	case "windows":
 		err = exec.Command("ping", "-n", "1", "-w", "3000", dstIP.String()).Run()
-	case "darwin", "freebsd":
+	case "ios", "darwin":
+		err = ns.sendICMPPingToIP(dstIP, 3*time.Second)
+	case "freebsd":
 		// Note: 2000 ms is actually 1 second + 2,000
 		// milliseconds extra for 3 seconds total.
 		// See https://github.com/tailscale/tailscale/pull/3753 for details.
