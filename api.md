@@ -68,6 +68,9 @@ The Tailscale API does not currently support pagination. All results are returne
   - Get device posture attributes: [`GET /api/v2/device/{deviceID}/attributes`](#get-device-posture-attributes)
   - Set custom device posture attributes: [`POST /api/v2/device/{deviceID}/attributes/{attributeKey}`](#set-device-posture-attributes)
   - Delete custom device posture attributes: [`DELETE /api/v2/device/{deviceID}/attributes/{attributeKey}`](#delete-custom-device-posture-attributes)
+- **Device invites**
+  - List device invites: [`GET /api/v2/device/{deviceID}/device-invites`](#list-device-invites)
+  - Create device invites: [`POST /api/v2/device/{deviceID}/device-invites`](#create-device-invites)
 
 **[Tailnet](#tailnet)**
 
@@ -97,6 +100,13 @@ The Tailscale API does not currently support pagination. All results are returne
     - Get split DNS: [`GET /api/v2/tailnet/{tailnet}/dns/split-dns`](#get-split-dns)
     - Update split DNS: [`PATCH /api/v2/tailnet/{tailnet}/dns/split-dns`](#update-split-dns)
     - Set split DNS: [`PUT /api/v2/tailnet/{tailnet}/dns/split-dns`](#set-split-dns)
+
+**[Device invites](#device-invites)**
+
+- Get device invite: [`GET /api/v2/device-invites/{deviceInviteId}`](#get-device-invite)
+- Delete device invite: [`DELETE /api/v2/device-invites/{deviceInviteId}`](#delete-device-invite)
+- Resend device invite (by email): [`POST /api/v2/device-invites/{deviceInviteId}/resend`](#resend-device-invite)
+- Accept device invite [`POST /api/v2/device-invites/-/accept`](#accept-device-invite)
 
 # Device
 
@@ -858,6 +868,109 @@ curl -X DELETE "https://api.tailscale.com/api/v2/device/11055/attributes/custom:
 ### Response
 
 The response is 2xx on success. The response body is currently an empty JSON object.
+
+## List device invites
+
+```
+GET /api/v2/device/{deviceID}/device-invites
+```
+
+List all share invites for a device.
+
+### Parameters
+
+#### `deviceID` (required in URL path)
+
+The ID of the device.
+
+### Request example
+
+```
+curl -X GET "https://api.tailscale.com/api/v2/device/11055/device-invites" \
+-u "tskey-api-xxxxx:"
+```
+
+### Response
+
+```json
+[
+  {
+    "id": "12345",
+    "created": "2024-05-08T20:19:51.777861756Z",
+    "tailnetId": 59954,
+    "deviceId": 11055,
+    "sharerId": 22011,
+    "allowExitNode": true,
+    "email": "user@example.com",
+    "lastEmailSentAt": "2024-05-08T20:19:51.777861756Z",
+    "inviteUrl": "https://login.tailscale.com/admin/invite/<code>",
+    "accepted": false
+  },
+  {
+    "id": "12346",
+    "created": "2024-04-03T21:38:49.333829261Z",
+    "tailnetId": 59954,
+    "deviceId": 11055,
+    "sharerId": 22012,
+    "inviteUrl": "https://login.tailscale.com/admin/invite/<code>",
+    "accepted": true,
+    "acceptedBy": {
+      "id": 33223,
+      "loginName": "someone@example.com",
+      "profilePicUrl": ""
+    }
+  }
+]
+```
+
+## Create device invites
+
+```
+POST /api/v2/device/{deviceID}/device-invites
+```
+
+Create new share invites for a device.
+
+### Parameters
+
+#### `deviceID` (required in URL path)
+
+The ID of the device.
+
+#### List of invite requests (required in `POST` body)
+
+- **`multiUse`:** Optionally specifies whether the invite should be able to be accepted more than once. When set to true, results in an invite that can be accepted up to 1000 times.
+- **`allowExitNode`:** Optionally specifies whether the invited user will be able to use the device as an exit node when the device is advertising as one.
+- **`email`:** Optionally specifies the email to which to send the created invite. If not set, an invite URL is generated and returned, but not sent out.
+
+### Request example
+
+```
+curl -X POST "https://api.tailscale.com/api/v2/device/11055/device-invites" \
+-u "tskey-api-xxxxx:" \
+-H "Content-Type: application/json" \
+--data-binary '[{"multiUse": true, "allowExitNode": true, "email":"user@example.com"}]'
+```
+
+### Response
+
+```json
+[
+  {
+    "id": "12347",
+    "created": "2024-05-08T20:29:45.842358533Z",
+    "tailnetId": 59954,
+    "deviceId": 11055,
+    "sharerId": 22012,
+    "multiUse": true,
+    "allowExitNode": true,
+    "email": "user@example.com",
+    "lastEmailSentAt": "2024-05-08T20:29:45.842358533Z",
+    "inviteUrl": "https://login.tailscale.com/admin/invite/<code>",
+    "accepted": false
+  }
+]
+```
 
 # Tailnet
 
@@ -2135,4 +2248,219 @@ The response is a JSON object containing the updated map of split DNS settings.
 
 ```jsonc
 {}
+```
+
+# Device invites
+
+A device invite is an invitation that shares a device with a user external to the device's tailnet
+
+Each device invite has a unique ID that is used to identify the invite in API calls.
+All device invite IDs for a paricular device can be found by [listing all device invites for a device](#list-device-invites)
+
+### Attributes
+
+```jsonc
+{
+  // id (strings) is the unique identifier for the invite.
+  // Supply this value wherever {deviceInviteId} is indicated in the endpoint.
+  "id": "12346",
+
+  // created is the creation time of the invite.
+  "created": "2024-04-03T21:38:49.333829261Z",
+
+  // tailnetId is the ID of the tailnet to which the shared device belongs.
+  "tailnetId": 59954,
+
+  // deviceId is the ID of the device being shared.
+  "deviceId": 11055,
+
+  // sharerId is the ID of the user who created the share invite.
+  "sharerId": 22012,
+
+  // multiUse specifies whether this device invite can be accepted more than
+  // once.
+  "multiUse": false,
+
+  // allowExitNode specifies whether the invited user is able to use the
+  // device as an exit node when the device is advertising as one.
+  "allowExitNode": true,
+
+  // email is the email to which the invite was sent.
+  // If empty, the invite was not emailed to anyone, but the inviteUrl can be
+  // shared manually.
+  "email": "user@example.com",
+
+  // lastEmailSentAt is the last time the invite was attempted to be sent to
+  // Email. Only ever set if Email is not empty.
+  "lastEmailSentAt": "2024-04-03T21:38:49.333829261Z",
+
+  // inviteUrl is the link to accept the invite.
+  // Anyone with this link can accept the invite.
+  // It is not restricted to the person to which the invite was emailed.
+  "inviteUrl": "https://login.tailscale.com/admin/invite/<code>",
+
+  // accepted is true when share invite has been accepted.
+  "accepted": true,
+
+  // acceptedBy is set when the invite has been accepted.
+  // It holds information about the user who accepted the share invite.
+  "acceptedBy": {
+    // id is the ID of the user who accepted the share invite.
+    "id": 33223,
+
+    // loginName is the login name of the user who accepted the share invite.
+    "loginName": "someone@example.com",
+
+    // profilePicUrl is optionally the profile pic URL for the user who accepted
+    // the share invite.
+    "profilePicUrl": ""
+  }
+}
+```
+
+## Get device invite
+
+```http
+GET /api/v2/device-invites/{deviceInviteId}
+```
+
+Retrieve the specified device invite.
+
+### Parameters
+
+#### `deviceInviteId` (required in URL path)
+
+The ID of the device share invite.
+
+### Request example
+
+```sh
+curl "https://api.tailscale.com/api/v2/device-invites/12346" \
+  -u "tskey-api-xxxxx:"
+```
+
+### Response
+
+```jsonc
+{
+  "id": "12346",
+  "created": "2024-04-03T21:38:49.333829261Z",
+  "tailnetId": 59954,
+  "deviceId": 11055,
+  "sharerId": 22012,
+  "multiUse": true,
+  "allowExitNode": true,
+  "email": "user@example.com",
+  "lastEmailSentAt": "2024-04-03T21:38:49.333829261Z",
+  "inviteUrl": "https://login.tailscale.com/admin/invite/<code>",
+  "accepted": false
+}
+```
+
+## Delete device invite
+
+```http
+DELETE /api/v2/device-invites/{deviceInviteId}
+```
+
+Delete the specified device invite.
+
+### Parameters
+
+#### `deviceInviteId` (required in URL path)
+
+The ID of the device share invite.
+
+### Request example
+
+```sh
+curl -X DELETE "https://api.tailscale.com/api/v2/device-invites/12346" \
+  -u "tskey-api-xxxxx:"
+```
+
+### Response
+
+The response is 2xx on success. The response body is an empty JSON object.
+
+## Resend device invite
+
+```http
+POST /api/v2/device-invites/{deviceInviteId}/resend
+```
+
+Resend the specified device invite by email. This can only be used if the specified invite was originally created with an email specified.
+See [creating device invites for a device](#create-device-invites).
+
+Note that invite resends are rate limited to once per minute.
+
+### Parameters
+
+#### `deviceInviteId` (required in URL path)
+
+The ID of the device share invite.
+
+### Request example
+
+```sh
+curl -X POST "https://api.tailscale.com/api/v2/device-invites/12346/resend" \
+  -u "tskey-api-xxxxx:"
+```
+
+### Response
+
+The response is 2xx on success. The response body is an empty JSON object.
+
+## Accept device invite
+
+```http
+POST /api/v2/device-invites/-/accept
+```
+
+Resend the specified device invite by email. This can only be used if the specified invite was originally created with an email specified.
+See [creating device invites for a device](#create-device-invites).
+
+Note that invite resends are rate limited to once per minute.
+
+### Parameters
+
+#### `invite` (required in `POST` body)
+
+Accepted as the URL of of the invite the form "https://login.tailscale.com/admin/invite/{code}"
+or just the "{code}" component of the above URL.
+
+### Request example
+
+```sh
+curl -X POST "https://api.tailscale.com/api/v2/device-invites/-/accept" \
+  -u "tskey-api-xxxxx:" \
+  -H "Content-Type: application/json" \
+  --data-binary '[{"invite": "https://login.tailscale.com/admin/invite/xxxxxx"}]'
+```
+
+### Response
+
+```jsonc
+{
+  "device": {
+    "id": "11055",
+    "os": "iOS",
+    "name": "my-phone",
+    "fqdn": "my-phone.something.ts.net",
+    "ipv4": "100.x.y.z",
+    "ipv6": "fd7a:115c:x::y:z",
+    "includeExitNode": false
+  },
+  "sharer": {
+    "id": "22012",
+    "displayName": "Some User",
+    "loginName": "someuser@example.com",
+    "profilePicURL": ""
+  },
+  "acceptedBy": {
+    "id": "33233",
+    "displayName": "Another User",
+    "loginName": "anotheruser@exmaple2.com",
+    "profilePicURL": ""
+  }
+}
 ```
