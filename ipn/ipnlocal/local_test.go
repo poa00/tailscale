@@ -3217,7 +3217,7 @@ func TestSuggestExitNode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := rand.New(rand.NewSource(100))
-			got, err := suggestExitNode(&tt.lastReport, &tt.netMap, r)
+			got, err := suggestExitNode(&tt.lastReport, &tt.netMap, r, false)
 			if got.Name != tt.wantName {
 				t.Errorf("name=%v, want %v", got.Name, tt.wantName)
 			}
@@ -3773,7 +3773,9 @@ func TestLocalBackendSuggestExitNode(t *testing.T) {
 		lb.lastSuggestedExitNode = tt.lastSuggestedExitNode
 		lb.netMap = &tt.netMap
 		lb.sys.MagicSock.Get().SetLastNetcheckReportForTest(context.Background(), tt.report)
-		got, err := lb.SuggestExitNode()
+		lb.mu.Lock()
+		got, err := lb.suggestExitNodeLocked(false)
+		lb.mu.Unlock()
 		if got.ID != tt.wantID {
 			t.Errorf("ID=%v, want=%v", got.ID, tt.wantID)
 		}
