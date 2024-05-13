@@ -335,6 +335,9 @@ type LocalBackend struct {
 	// lastSuggestedExitNode stores the last suggested exit node ID and name.
 	// lastSuggestedExitNode updates whenever the suggestion changes.
 	lastSuggestedExitNode lastSuggestedExitNode
+
+	offlineAutoUpdateMu     sync.Mutex
+	offlineAutoUpdateCancel func()
 }
 
 // HealthTracker returns the health tracker for the backend.
@@ -3341,6 +3344,14 @@ func (b *LocalBackend) setPrefsLockedOnEntry(newp *ipn.Prefs, unlock unlockOnce)
 		b.authReconfig()
 	}
 
+	if newp.AutoUpdate.Apply.EqualBool(true) {
+		if b.state != ipn.Running {
+			b.maybeStartOfflineAutoUpdate(newp.View())
+		}
+	} else {
+		b.stopOfflineAutoUpdate()
+	}
+
 	b.send(ipn.Notify{Prefs: &prefs})
 	return prefs
 }
@@ -4354,6 +4365,12 @@ func (b *LocalBackend) enterStateLockedOnEntry(newState ipn.State, unlock unlock
 		b.closePeerAPIListenersLocked()
 	}
 	b.pauseOrResumeControlClientLocked()
+
+	if newState == ipn.Running {
+		b.stopOfflineAutoUpdate()
+	} else {
+		b.maybeStartOfflineAutoUpdate(prefs)
+	}
 
 	unlock.UnlockEarly()
 
